@@ -1,0 +1,114 @@
+from burp import IBurpExtender
+from burp import IMessageEditorTabFactory
+from burp import IMessageEditorTab
+from burp import IParameter
+
+
+class BurpExtender(IBurpExtender, IMessageEditorTabFactory):
+
+    #
+    # implement IBurpExtender
+    #
+
+    def registerExtenderCallbacks(self, callbacks):
+        # keep a reference to our callbacks object
+        self._callbacks = callbacks
+
+        # obtain an extension helpers object
+        self._helpers = callbacks.getHelpers()
+
+        # set our extension name
+        callbacks.setExtensionName("utf-16 decoder")
+
+        # register ourselves as a message editor tab factory
+        callbacks.registerMessageEditorTabFactory(self)
+
+    #
+    # implement IMessageEditorTabFactory
+    #
+
+    def createNewInstance(self, controller, editable):
+        # create a new instance of our custom editor tab
+        return Base64InputTab(self, controller, editable)
+
+
+#
+# class implementing IMessageEditorTab
+#
+
+class Base64InputTab(IMessageEditorTab):
+    def __init__(self, extender, controller, editable):
+        self._extender = extender
+        self._editable = editable
+
+        # create an instance of Burp's text editor, to display our deserialized data
+        self._txtInput = extender._callbacks.createTextEditor()
+        self._txtInput.setEditable(editable)
+
+    #
+    # implement IMessageEditorTab
+    #
+
+    def getTabCaption(self):
+        return "utf-16 decoded content"
+
+    def getUiComponent(self):
+        return self._txtInput.getComponent()
+
+    def isEnabled(self, content, isRequest):
+        # enable this tab for requests containing a data parameter
+        return isRequest and 'Content-Type: application/json; charset=utf-16' in self._extender._helpers.analyzeRequest(content).getHeaders()
+
+    def setMessage(self, content, isRequest):
+        if content is None:
+            # clear our display
+            self._txtInput.setText(None)
+            self._txtInput.setEditable(False)
+
+        else:
+            # retrieve the data parameter
+            offset = self._extender._helpers.analyzeRequest(content).getBodyOffset()
+            body = content[offset:].tostring()
+            decoded_body = body.decode('utf-16le').encode('utf-8')
+            self._txtInput.setText(decoded_body)
+            # deserialize the parameter value
+            self._txtInput.setEditable(True)
+
+        # remember the displayed content
+        self._currentMessage = content
+
+    def getMessage(self):
+        # determine whether the user modified the deserialized data
+        # if self._txtInput.isTextModified():f
+        print "1"
+        msg = self._txtInput.getText().tostring()
+        # try:
+        #     # Here place the encoder
+        #     data = msg.decode('utf-8').encode('utf-16le')
+        # except Exception:
+        #     data = msg
+        # Reconstruct request/response
+        print "2"
+        r = self._extender._helpers.analyzeRequest(self._currentMessage)
+        print "3"
+        data_bytes = self._extender._helpers.stringToBytes(msg)
+        print "4"
+        headers = r.getHeaders()
+        print "5"
+        newHeaders = []
+        for header in headers:
+            if 'Content-Type: application/json; charset=utf-16' in header:
+                print "6"
+                newHeaders.append('Content-Type: application/json; charset=utf-8')
+                print "7"
+            else:
+                newHeaders.append(header)
+        return self._extender._helpers.buildHttpMessage(newHeaders, data_bytes)
+        # else:
+        #     return self._currentMessage
+
+    def isModified(self):
+        return self._txtInput.isTextModified()
+
+    def getSelectedData(self):
+        return self._txtInput.getSelectedText()
