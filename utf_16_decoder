@@ -80,27 +80,14 @@ class Base64InputTab(IMessageEditorTab):
     def getMessage(self):
         # determine whether the user modified the deserialized data
         # if self._txtInput.isTextModified():f
-        print "1"
         msg = self._txtInput.getText().tostring()
-        # try:
-        #     # Here place the encoder
-        #     data = msg.decode('utf-8').encode('utf-16le')
-        # except Exception:
-        #     data = msg
-        # Reconstruct request/response
-        print "2"
         r = self._extender._helpers.analyzeRequest(self._currentMessage)
-        print "3"
         data_bytes = self._extender._helpers.stringToBytes(msg)
-        print "4"
         headers = r.getHeaders()
-        print "5"
         newHeaders = []
         for header in headers:
             if 'Content-Type: application/json; charset=utf-16' in header:
-                print "6"
                 newHeaders.append('Content-Type: application/json; charset=utf-8')
-                print "7"
             else:
                 newHeaders.append(header)
         return self._extender._helpers.buildHttpMessage(newHeaders, data_bytes)
